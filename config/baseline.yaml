@@ -10,9 +10,9 @@ game:
 
 # Policies to evaluate
 policies:
-  - name: "random"
-    parameters:
-      seed: 42
+  # - name: "random"
+  #   parameters:
+  #     seed: 42
     
   - name: "intuitive_gamer" 
     parameters: {}

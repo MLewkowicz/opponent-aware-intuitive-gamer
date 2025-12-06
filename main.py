@@ -75,6 +75,13 @@ def run_experiment(config: Dict[str, Any]) -> None:
     print("POLICY SETUP")
     print('='*50)
     policies = load_policies(config["policies"], game)
+
+
+    for policy_id, policy_info in policies.items():
+        policy = policy_info["policy"]
+        print(f"\nEvaluating policy: {policy_id}")
+
+        policy.action_likelihoods(game.new_initial_state())
     
 
 
