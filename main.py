@@ -118,7 +118,6 @@ def run_experiment(config: Dict[str, Any]) -> None:
         policy.action_likelihoods(game.new_initial_state())
     
 
-
 def main():
     parser = argparse.ArgumentParser(description="Run game policy comparison experiments")
     parser.add_argument("--config", "-c", type=str, required=True, 
