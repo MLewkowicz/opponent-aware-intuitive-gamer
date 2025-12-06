@@ -1,4 +1,4 @@
-from main import load_game, load_policies, load_sampler
+# Removed circular import - functions will be passed as parameters instead
 import itertools
 from typing import Dict
 import random
@@ -6,22 +6,32 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import pandas as pd
 import numpy as np
+from typing import Any
 
 class Experiment():
-    def __init__(self, num_samples: int, policies: Dict[str, Any], sampler: Any):
-        self.num_samples = num_samples
+    def __init__(self, policies: Dict[str, Any], sampler: Any):
         self.policies = policies
         self.sampler = sampler
 
     def run_pairwise_comparison(self):
         comparison_results = {}
+        
+        # Get samples with error handling
+        try:
+            samples = self.sampler.samples()
+            if samples is None:
+                raise ValueError("Sampler returned None")
+            print(f"Got {len(samples)} samples for analysis")
+        except Exception as e:
+            print(f"Error getting samples: {e}")
+            return {}
 
-        for _ in range(self.num_samples):
-            state = self.sampler.sample()
+        for game_state in samples:
+            state = game_state['state'] 
             legal_actions = list(state.legal_actions())
 
             policy_probs = {
-                name: p.action_likelihoods(state) 
+                name: p['policy'].action_likelihoods(state) 
                 for name, p in self.policies.items()
             }
 
@@ -48,12 +58,13 @@ class Experiment():
         """
         comparison_results = {}
 
-        for _ in range(self.num_samples):
-            state = self.sampler.sample()
+        samples = self.sampler.samples()
+        for game_state in samples:
+            state = game_state['state'] 
             
             policy_max_actions = {}
             for name, policy in self.policies.items():
-                probs = policy.action_likelihoods(state)
+                probs = policy['policy'].action_likelihoods(state)
                 
                 if probs:
                     best_action = max(probs, key=probs.get)
@@ -86,17 +97,43 @@ def visualize_agreement_heatmap(comparison_results, title="Policy Agreement Scor
     n = len(labels)
     df = pd.DataFrame(np.ones((n, n)), index=labels, columns=labels)
     for (name_a, name_b), stats in comparison_results.items():
-        if stats["total"] > 0:
-            score = stats["agreements"] / stats["total"]
+        if stats["totals"] > 0:
+            score = stats["agreements"] / stats["totals"]
         else:
             score = 0.0
         df.at[name_a, name_b] = score
         df.at[name_b, name_a] = score
 
-    plt.figure(figsize=(8, 6))
-    sns.heatmap(df, annot=True, fmt=".2%", cmap="RdYlGn", vmin=0, vmax=1.0)
+    # Create figure with better styling
+    plt.figure(figsize=(10, 8))
+    plt.style.use('default')  # Clean base style
     
-    plt.title(title)
+    # Use a more pleasing color palette - blues with good contrast
+    sns.heatmap(df, 
+                annot=True, 
+                fmt=".1%",  # Show one decimal place for percentages
+                cmap="Blues",  # Easier on the eyes than RdYlGn
+                vmin=0, 
+                vmax=1.0,
+                square=True,  # Make cells square for better symmetry
+                linewidths=0.5,  # Add subtle grid lines
+                linecolor='white',
+                cbar_kws={
+                    'label': 'Agreement Rate',
+                    'shrink': 0.8,
+                    'format': '%.0%'
+                },
+                annot_kws={'size': 12, 'weight': 'bold'})  # Larger, bolder text
+    
+    # Improve title and labels
+    plt.title(title, fontsize=16, fontweight='bold', pad=20)
+    plt.xlabel('Policy', fontsize=12, fontweight='bold')
+    plt.ylabel('Policy', fontsize=12, fontweight='bold')
+    
+    # Rotate labels for better readability
+    plt.xticks(rotation=45, ha='right')
+    plt.yticks(rotation=0)
+    
     plt.tight_layout()
     plt.show()
 

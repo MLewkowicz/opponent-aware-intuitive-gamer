@@ -37,7 +37,19 @@ class IntuitiveGamerPolicy(GamePolicy):
     
     def _extract_board(self, state):
         """Assumes OpenSpiel tic-tac-toe representation:  3×3×3 tensor, with channels [X,O,empty_or_turn]."""
-        obs = np.array(state.observation_tensor()).reshape(self.game.observation_tensor_shape())
+        # For terminal states or when we need a specific player's view
+        if state.is_terminal():
+            # Use player 0's observation for terminal states
+            obs = np.array(state.observation_tensor(0)).reshape(self.game.observation_tensor_shape())
+        else:
+            # Use current player's observation
+            current_player = state.current_player()
+            if current_player >= 0:  # Valid player
+                obs = np.array(state.observation_tensor(current_player)).reshape(self.game.observation_tensor_shape())
+            else:
+                # Fallback to player 0's view if current_player is invalid
+                obs = np.array(state.observation_tensor(0)).reshape(self.game.observation_tensor_shape())
+        
         # channel 0 = X, channel 1 = O (typical)
         X = obs[2, :, :]
         O = obs[1, :, :]

@@ -47,6 +47,7 @@ def generate_all_states(ds, state, visited, game):
         'longest_chain_opp': longest_chain_opp,
         'freespace': len(state.legal_actions()),
         'winning': longest_chain_me >= longest_chain_opp,
+        'current_player': me
     }
     visited[key] = info
     ds.add(info)
@@ -79,8 +80,12 @@ class GameStateDataset:
         """
         out = []
         for x in self._items:
-            if all(x[k] == v for k, v in kwargs.items()):
-                out.append(x)
+            try:
+                if all(x.get(k) == v for k, v in kwargs.items()):
+                    out.append(x)
+            except Exception as e:
+                print(f"Error filtering item {x}: {e}")
+                continue
         return GameStateView(out)   # return a view you can continue filtering
 
     def where(self, fn):
@@ -101,18 +106,32 @@ class GameStateView:
     def filter(self, **kwargs):
         out = []
         for x in self._items:
-            if all(x[k] == v for k, v in kwargs.items()):
-                out.append(x)
+            try:
+                if all(x.get(k) == v for k, v in kwargs.items()):
+                    out.append(x)
+            except Exception as e:
+                print(f"Error filtering item {x}: {e}")
+                continue
         return GameStateView(out)
 
     def where(self, fn):
         return GameStateView([x for x in self._items if fn(x)])
 
     def sample(self, k=1, replace=True):
-        if replace:
-            return random.choices(self._items, k=k)   # with replacement
-        else:
-            return random.sample(self._items, k=k)    # without replacement
+        if not self._items:
+            print("Warning: Trying to sample from empty dataset")
+            return []
+        if not replace and k > len(self._items):
+            print(f"Warning: Cannot sample {k} items without replacement from {len(self._items)} items")
+            return []
+        try:
+            if replace:
+                return random.choices(self._items, k=k)   # with replacement
+            else:
+                return random.sample(self._items, k=k)    # without replacement
+        except Exception as e:
+            print(f"Error during sampling: {e}")
+            return []
 
     def __len__(self):
         return len(self._items)
