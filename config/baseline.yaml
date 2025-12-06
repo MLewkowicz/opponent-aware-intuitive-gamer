@@ -25,3 +25,13 @@ policies:
   #     stochastic: false         # Whether to return deterministic or stochastic action likelihoods
       
   
+sampler:
+  # filters:
+  #   winning: true             # simple equality filters
+  #   current_player: 1
+  predicates:
+    - "lambda x: x['freespace'] < 5"
+    # - "lambda x: x['longest_chain_me'] > 2"
+  sample:
+    k: 64
+    replace: false

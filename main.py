@@ -4,7 +4,7 @@ import pyspiel
 from typing import List, Dict, Any
 from policies.policy_registry import instantiate_policy, POLICY_REGISTRY
 import os
-from state_sampler.sampler_registry import instantiate_sampler, SAMPLER_REGISTRY
+from state_dataset.dataset import GameStateView, GameStateDataset
 
 
 def load_game(game_config: Dict[str, Any]) -> pyspiel.Game:
@@ -58,40 +58,16 @@ def load_policies(policies_config: List[Dict[str, Any]], game: pyspiel.Game) -> 
     
     return policies
 
-def load_sampler(sampler_config: List[Dict[str, Any]], game: pyspiel.Game) -> Dict[str, Any]:
-    """Load and initialize samplers from configuration."""
-    samplers = {}
-
-    print(f"\nAvailable samplers: {list(SAMPLER_REGISTRY.keys())}")
-    print("Loading samplers:")
-    
-    for i, sampler_config in enumerate(sampler_config):
-        try:
-            # Add the game parameter to sampler config
-            sampler_config_with_game = sampler_config.copy()
-            if "parameters" not in sampler_config_with_game:
-                sampler_config_with_game["parameters"] = {}
-            sampler_config_with_game["parameters"]["game"] = game
-
-            sampler = instantiate_sampler(sampler_config_with_game)
-            sampler_name = sampler_config["name"]
-            sampler_id = f"{sampler_name}_{i}" if sampler_name in samplers else sampler_name
-            samplers[sampler_id] = {
-                "sampler": sampler,
-                "config": sampler_config
-            }
-            print(f"  ✓ {sampler_id}: {sampler.__class__.__name__}")
-            
-        except Exception as e:
-            sampler_name = sampler_config.get("name", "unknown")
-            print(f"  ✗ Failed to load sampler '{sampler_name}': {e}")
-            continue
-
-    if not samplers:
-        raise RuntimeError("No samplers were successfully loaded")
-    return samplers
-
-
+def build_sampler(cfg, game):
+    ds = GameStateDataset(game)
+    scfg = cfg.get("sampler",{})
+    view = GameStateView(ds.all())
+    if filters := scfg.get("filters"):
+        view = view.filter(**filters)
+    for p in scfg.get("predicates",[]):
+        fn = p if callable(p) else eval(p)
+        view = view.where(fn)
+    return view
 
 def run_experiment(config: Dict[str, Any]) -> None:
     """Run the full experiment based on configuration."""
@@ -109,6 +85,8 @@ def run_experiment(config: Dict[str, Any]) -> None:
     print("POLICY SETUP")
     print('='*50)
     policies = load_policies(config["policies"], game)
+
+    state_samples = build_sampler(config, game)
 
 
     for policy_id, policy_info in policies.items():
