@@ -30,7 +30,7 @@ def longest_chain(state, player, game):
                 best = max(best, length)
     return best
 
-def generate_all_states(ds, state, visited, game):
+def generate_all_states(ds, state, visited, num_turns, game):
     key = state.to_string()
     if key in visited or state.is_terminal():
         return
@@ -47,7 +47,8 @@ def generate_all_states(ds, state, visited, game):
         'longest_chain_opp': longest_chain_opp,
         'freespace': len(state.legal_actions()),
         'winning': longest_chain_me >= longest_chain_opp,
-        'current_player': me
+        'current_player': me,
+        'num_turns': num_turns 
     }
     visited[key] = info
     ds.add(info)
@@ -55,7 +56,8 @@ def generate_all_states(ds, state, visited, game):
     for a in state.legal_actions():
         child = state.clone()
         child.apply_action(a)
-        generate_all_states(ds, child, visited, game)
+        num_turns_child = num_turns + 1
+        generate_all_states(ds, child, visited, num_turns_child, game)
 
 
 class GameStateDataset:
@@ -63,7 +65,7 @@ class GameStateDataset:
         self._items = []    # list of dicts
         self._indices = None   # for no-replacement mode
         self.game = game
-        generate_all_states(self, game.new_initial_state(), {}, game)
+        generate_all_states(self, game.new_initial_state(), {}, 0, game)
         
 
     

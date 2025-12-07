@@ -64,19 +64,7 @@ def build_sampler(cfg, game):
     view = GameStateView(ds.all())
     
     print(f"Initial dataset size: {len(view)}")
-    
-    if filters := scfg.get("filters"):
-        # Handle both dictionary and list of dictionaries
-        if isinstance(filters, list):
-            # Apply each filter dictionary separately
-            for filter_dict in filters:
-                if isinstance(filter_dict, dict):
-                    view = view.filter(**filter_dict)
-                    print(f"After filter {filter_dict}: {len(view)} items")
-        elif isinstance(filters, dict):
-            view = view.filter(**filters)
-            print(f"After filters: {len(view)} items")
-    
+        
     for p in scfg.get("predicates",[]):
         fn = p if callable(p) else eval(p)
         view = view.where(fn)

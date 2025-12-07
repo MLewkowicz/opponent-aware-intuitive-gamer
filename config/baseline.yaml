@@ -26,12 +26,12 @@ policies:
       
   
 sampler:
-  filters:
-    - winning: true             # simple equality filters
-    # - current_player: 1
   predicates:
-    - "lambda x: x['freespace'] > 0"
-    # - "lambda x: x['longest_chain_me'] > 2"
+    - "lambda x: x['current_player'] in [1]"
+    - "lambda x: x['winning'] == True"
+    - "lambda x: x['num_turns'] > 0"
+    - "lambda x: x['longest_chain_me'] > 0"
+    - "lambda x: x['longest_chain_opp'] > 0"    
   sample:
     k: 1000
     replace: false
