@@ -7,7 +7,7 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 from typing import Any
-
+import math
 class Experiment():
     def __init__(self, policies: Dict[str, Any], sampler: Any):
         self.policies = policies
@@ -83,58 +83,76 @@ class Experiment():
                 comparison_results[pair_key]["totals"] += 1
         return comparison_results
 
-def visualize_agreement_heatmap(comparison_results, title="Policy Agreement Scores"):
+def visualize_agreement_heatmap(results_data, titles=None):
     """
-    Takes the dictionary output from Experiment.run_* functions 
-    and generates a heatmap of agreement percentages.
+    Visualizes agreement results. Accepts a single dict or a list of dicts.
     """
-    policy_names = set()
-    for (p1, p2) in comparison_results.keys():
-        policy_names.add(p1)
-        policy_names.add(p2)
-    
-    labels = sorted(list(policy_names))
-    n = len(labels)
-    df = pd.DataFrame(np.ones((n, n)), index=labels, columns=labels)
-    for (name_a, name_b), stats in comparison_results.items():
-        if stats["totals"] > 0:
-            score = stats["agreements"] / stats["totals"]
-        else:
-            score = 0.0
-        df.at[name_a, name_b] = score
-        df.at[name_b, name_a] = score
+    # 1. Normalize inputs to lists
+    if isinstance(results_data, dict):
+        results_list = [results_data]
+    else:
+        results_list = results_data
 
-    # Create figure with better styling
-    plt.figure(figsize=(10, 8))
-    plt.style.use('default')  # Clean base style
+    # Handle titles
+    if titles is None:
+        titles = [f"Comparison {i+1}" for i in range(len(results_list))]
+    elif isinstance(titles, str):
+        titles = [titles]
+
+    n_plots = len(results_list)
     
-    # Use a more pleasing color palette - blues with good contrast
-    sns.heatmap(df, 
-                annot=True, 
-                fmt=".1%",  # Show one decimal place for percentages
-                cmap="Blues",  # Easier on the eyes than RdYlGn
-                vmin=0, 
-                vmax=1.0,
-                square=True,  # Make cells square for better symmetry
-                linewidths=0.5,  # Add subtle grid lines
-                linecolor='white',
-                cbar_kws={
-                    'label': 'Agreement Rate',
-                    'shrink': 0.8,
-                    'format': '%.0%'
-                },
-                annot_kws={'size': 12, 'weight': 'bold'})  # Larger, bolder text
-    
-    # Improve title and labels
-    plt.title(title, fontsize=16, fontweight='bold', pad=20)
-    plt.xlabel('Policy', fontsize=12, fontweight='bold')
-    plt.ylabel('Policy', fontsize=12, fontweight='bold')
-    
-    # Rotate labels for better readability
-    plt.xticks(rotation=45, ha='right')
-    plt.yticks(rotation=0)
-    
-    plt.tight_layout()
+    # 2. Setup Figure and Axes
+    if n_plots == 1:
+        # Simple single plot
+        fig, axes = plt.subplots(figsize=(8, 6))
+        axes_list = [axes] # Wrap in list to make iterable
+    else:
+        cols = min(n_plots, 3)
+        rows = math.ceil(n_plots / cols)
+        fig, axes = plt.subplots(rows, cols, figsize=(6*cols, 5*rows), constrained_layout=True)
+        axes_list = axes.flatten()
+
+    # 3. Iterate and Plot
+    for i, (results, ax) in enumerate(zip(results_list, axes_list)):
+        # Extract unique policy names
+        policy_names = sorted(list({p for pair in results.keys() for p in pair}))
+        n = len(policy_names)
+        
+        if n == 0:
+            ax.text(0.5, 0.5, "No Data", ha='center', va='center')
+            continue
+
+        # Build DataFrame
+        df = pd.DataFrame(np.zeros((n, n)), index=policy_names, columns=policy_names)
+        
+        for (name_a, name_b), stats in results.items():
+            # Support both 'totals' and 'total' keys
+            total = stats.get("totals", stats.get("total", 0))
+            score = stats["agreements"] / total if total > 0 else 0
+            
+            # Fill symmetric matrix
+            if name_a in df.index and name_b in df.columns:
+                df.at[name_a, name_b] = score
+                df.at[name_b, name_a] = score
+                # Fill diagonal with 1.0 (100%) for visual completeness
+                if name_a == name_b: 
+                     df.at[name_a, name_b] = 1.0
+
+        # Plot Heatmap
+        # Mask the upper triangle to reduce visual clutter (optional, remove mask=mask if unwanted)
+        mask = np.triu(np.ones_like(df, dtype=bool), k=1)
+        
+        sns.heatmap(df, ax=ax, annot=True, fmt=".1%", cmap="Blues", 
+                    vmin=0, vmax=1.0, square=True, mask=None,
+                    cbar_kws={'shrink': 0.8})
+        
+        current_title = titles[i] if i < len(titles) else f"Plot {i+1}"
+        ax.set_title(current_title, fontsize=14, fontweight='bold')
+        ax.set_xticklabels(ax.get_xticklabels(), rotation=45, ha='right')
+
+    for j in range(n_plots, len(axes_list)):
+        axes_list[j].axis('off')
+
     plt.show()
 
 # --- Example Usage ---
