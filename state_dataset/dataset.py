@@ -46,7 +46,9 @@ def generate_all_states(ds, state, visited, num_turns, game):
         'longest_chain_me': longest_chain_me,
         'longest_chain_opp': longest_chain_opp,
         'freespace': len(state.legal_actions()),
-        'winning': longest_chain_me >= longest_chain_opp,
+        'winning': longest_chain_me > longest_chain_opp,
+        'tied': longest_chain_me == longest_chain_opp,
+        'losing': longest_chain_me < longest_chain_opp,
         'current_player': me,
         'num_turns': num_turns 
     }
