@@ -1,11 +1,9 @@
 import sys
 import os
-
 import random
 import math
 import pyspiel
 import numpy as np
-
 from policies.base import GamePolicy
 
 class MCTSNode:
@@ -47,7 +45,7 @@ class MCTSNode:
 
 class MCTSAgent(GamePolicy):
     def __init__(self, game, player_id=0, iterations=1000, exploration_weight=1.41, max_depth=50, stochastic=True):
-        self.game = game
+        super().__init__(game)
         self.player_id = player_id
         self.iterations = iterations
         self.exploration_weight = exploration_weight
@@ -55,72 +53,70 @@ class MCTSAgent(GamePolicy):
         self.stochastic = stochastic
         
     def action_likelihoods(self, state):
+        # MCTS Logic remains the same
         if self.stochastic: 
-            action_counts = {a: 0 for a in state.legal_actions()}
             for _ in range(self.iterations):
                 root = MCTSNode(state=state.clone())
+                # Note: We rebuild the tree every step for pure MCTS. 
+                # Ideally, you keep the tree, but for this snippet, rebuilding is safer to avoid state desync.
                 for _ in range(self.iterations):
                     node = self.select(root)
-                    reward = self.simulate(node)
-                    self.backpropagate(node, reward)
+                    # FIX 1: Returns vector
+                    rewards = self.simulate(node)
+                    # FIX 2: Backpropagate vector
+                    self.backpropagate(node, rewards)
                 
-                # Calculate likelihoods based on visit counts of root's children
                 total_visits = sum(child.visits for child in root.children)
+                # Handle edge case where root has no children (terminal state passed in)
+                if total_visits == 0:
+                    return {}
+
                 likelihoods = {child.action: child.visits / total_visits for child in root.children}
                 
-                # Ensure all legal actions are in the dict (even if 0 visits)
                 for a in state.legal_actions():
                     if a not in likelihoods:
                         likelihoods[a] = 0.0
                         
                 return likelihoods
         else:
-            action = self.select_action(state)
+            action = self.step(state) # Reuse step for deterministic
             likelihoods = {a: 0.0 for a in state.legal_actions()}
             if action is not None:
                 likelihoods[action] = 1.0
             return likelihoods
     
     def step(self, state):
-        """
-        Executes MCTS simulations and selects an action.
-        If stochastic=True, samples based on visit count distribution.
-        If stochastic=False, selects the most visited action.
-        """
-        # We use action_likelihoods to reuse the MCTS run logic
-        probs_dict = self.action_likelihoods(state)
+        # We assume the tree building happens inside action_likelihoods or here. 
+        # For efficiency, let's implement the tree build directly in a helper or here.
+        # But to keep it consistent with your request to use `action_likelihoods`:
         
-        if not probs_dict:
-            return None
-
-        actions = list(probs_dict.keys())
-        probs = list(probs_dict.values())
-
-        if self.stochastic:
-            return np.random.choice(actions, p=probs)
-        else:
-            # Deterministic: Argmax
-            return max(probs_dict, key=probs_dict.get)
-    
-    def select_action(self, root_state):
-        # Create root node with a clone of the state
-        root = MCTSNode(state=root_state.clone())
-
+        # If we need to run MCTS for this step specifically:
+        root = MCTSNode(state=state.clone())
+        
+        # Check simple terminal case
         if root.state.is_terminal():
             return None
 
         for _ in range(self.iterations):
             node = self.select(root)
-            reward = self.simulate(node)
-            self.backpropagate(node, reward)
+            rewards = self.simulate(node)
+            self.backpropagate(node, rewards)
 
-        # Select the best action based on pure exploitation
-        best_child = root.best_child(exploration_weight=0)
-        
-        if best_child is None:
-            return random.choice(root_state.legal_actions())
-            
-        return best_child.action
+        # For the final step, MCTS usually picks the most visited child (Robust Child)
+        # regardless of stochastic/deterministic flag for the tree search part.
+        if not root.children:
+            return random.choice(state.legal_actions())
+
+        # If stochastic is requested for the final policy output:
+        if self.stochastic:
+            total_visits = sum(c.visits for c in root.children)
+            probs = [c.visits/total_visits for c in root.children]
+            actions = [c.action for c in root.children]
+            return np.random.choice(actions, p=probs)
+        else:
+            # Deterministic: Return action with max visits
+            best_child = max(root.children, key=lambda c: c.visits)
+            return best_child.action
 
     def select(self, node):
         while not node.state.is_terminal():
@@ -134,15 +130,16 @@ class MCTSAgent(GamePolicy):
 
     def expand(self, node):
         action = node.untried_actions.pop()
-        
         next_state = node.state.clone()
         next_state.apply_action(action)
-        
         child_node = MCTSNode(state=next_state, parent=node, action=action)
         node.children.append(child_node)
         return child_node
 
     def simulate(self, node):
+        """
+        Returns the full returns vector for all players.
+        """
         current_state = node.state.clone()
         depth = 0
 
@@ -150,19 +147,31 @@ class MCTSAgent(GamePolicy):
             legal_actions = current_state.legal_actions()
             if not legal_actions:
                 break
-            
             action = random.choice(legal_actions)
             current_state.apply_action(action)
             depth += 1
 
-        return current_state.returns()[self.player_id]
+        # FIX: Return the full rewards vector [p0_reward, p1_reward, ...]
+        return current_state.returns()
 
-    def backpropagate(self, node, reward):
+    def backpropagate(self, node, rewards):
+        """
+        Updates nodes with the reward specific to the player who made the move 
+        leading to that node.
+        """
         while node is not None:
             node.visits += 1
-            node.value += reward
+            
+            # The value of a node is "how good was the move that got us here?"
+            # The move was made by node.parent.state.current_player()
+            if node.parent is not None:
+                # Identify who made the move to get to this node
+                player_who_moved = node.parent.state.current_player()
+                # Add that specific player's reward to this node's value
+                node.value += rewards[player_who_moved]
+            
             node = node.parent
-
+            
 if __name__ == "__main__":
     game_name = "connect_four" 
     game = pyspiel.load_game(game_name)
