@@ -81,6 +81,27 @@ class MCTSAgent(GamePolicy):
                 likelihoods[action] = 1.0
             return likelihoods
     
+    def step(self, state):
+        """
+        Executes MCTS simulations and selects an action.
+        If stochastic=True, samples based on visit count distribution.
+        If stochastic=False, selects the most visited action.
+        """
+        # We use action_likelihoods to reuse the MCTS run logic
+        probs_dict = self.action_likelihoods(state)
+        
+        if not probs_dict:
+            return None
+
+        actions = list(probs_dict.keys())
+        probs = list(probs_dict.values())
+
+        if self.stochastic:
+            return np.random.choice(actions, p=probs)
+        else:
+            # Deterministic: Argmax
+            return max(probs_dict, key=probs_dict.get)
+    
     def select_action(self, root_state):
         # Create root node with a clone of the state
         root = MCTSNode(state=root_state.clone())

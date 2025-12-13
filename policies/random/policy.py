@@ -18,3 +18,9 @@ class RandomPolicy(GamePolicy):
         
         uniform_prob = 1.0 / len(legal_actions)
         return {action: uniform_prob for action in legal_actions}
+    
+    def step(self, state):
+        legal_actions = state.legal_actions()
+        if not legal_actions:
+            return None
+        return self.rng.choice(legal_actions)

@@ -6,12 +6,14 @@ from typing import Dict, Any
 from .intuitivegamer.policy import IntuitiveGamerPolicy
 from .random.policy import RandomPolicy
 from .mcts.policy import MCTSAgent
+from .intuitivegamer_depth_limited.policy import DepthLimitedIGPolicy
 
 # Registry of available evaluators
 POLICY_REGISTRY = {
     "intuitive_gamer": IntuitiveGamerPolicy,
     "random": RandomPolicy,
     "mcts": MCTSAgent,
+    "intuitive_gamer_depth_limited": DepthLimitedIGPolicy,
 }
 
 def get_policy(name: str):

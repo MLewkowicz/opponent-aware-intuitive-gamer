@@ -17,3 +17,6 @@ class GamePolicy(ABC):
     def action_likelihoods(self, state: pyspiel.State) -> Dict[int, float]:
         pass
     
+    @abstractmethod
+    def step(self, state: pyspiel.State) -> int:
+        pass

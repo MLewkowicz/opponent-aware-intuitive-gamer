@@ -1,4 +1,3 @@
-# Removed circular import - functions will be passed as parameters instead
 import itertools
 from typing import Dict
 import random

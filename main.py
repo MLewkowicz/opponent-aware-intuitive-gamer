@@ -41,7 +41,7 @@ def load_policies(policies_config: List[Dict[str, Any]], game: pyspiel.Game) -> 
             policy = instantiate_policy(policy_config_with_game)
             policy_name = policy_config["name"]
             policy_id = f"{policy_name}_{i}" if policy_name in policies else policy_name
-            
+        
             policies[policy_id] = {
                 "policy": policy,
                 "config": policy_config

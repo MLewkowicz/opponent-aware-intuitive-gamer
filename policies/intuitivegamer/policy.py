@@ -29,6 +29,11 @@ def softmax(x):
 
 class IntuitiveGamerPolicy(GamePolicy):
 
+    def __init__(self, game, weights={'connect': 1.0, 'block': 1.0, 'center': 1.0}):
+        self.game = game
+        self.weights = weights
+        self.directions = [(1,0), (0,1), (1,1), (1,-1)]
+
     # ----- helpers -----
     def _apply_action(self, state, action):
         nxt = state.clone()
@@ -107,7 +112,13 @@ class IntuitiveGamerPolicy(GamePolicy):
             n1 = self._uself(state, action)
             n2 = self._uopp(state, action)
             
-            likelihoods[action] = np.power(2, (1 - d) + n1 + n2)
+            # val = (self.weights['center'] * (1 - d)) + \
+            #       (self.weights['connect'] * n1) + \
+            #       (self.weights['block'] * n2)
+            # score = np.power(2, val)
+
+            score = np.power(2, (1 - d) + n1 + n2)
+            likelihoods[action] = score
         
         values = np.array(list(likelihoods.values()))
         probs = softmax(values)
@@ -115,3 +126,13 @@ class IntuitiveGamerPolicy(GamePolicy):
             likelihoods[action] = probs[i]
 
         return likelihoods
+    
+    def step(self, state):
+        probs_dict = self.action_likelihoods(state)
+        if not probs_dict:
+            return None
+            
+        actions = list(probs_dict.keys())
+        probs = list(probs_dict.values())
+        
+        return np.random.choice(actions, p=probs)
