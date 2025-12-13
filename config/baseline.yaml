@@ -41,8 +41,8 @@ policies:
 
   - name: "mcts"
     parameters:
-      iterations: 10000         # Number of MCTS simulations per move
-      exploration_weight: 1.4   # Exploration parameter for UCT
+      iterations: 1000         # Number of MCTS simulations per move
+      exploration_weight: 1.4 # Exploration parameter for UCT
       max_depth: 50             # Maximum depth for simulations
       stochastic: false         # Whether to return deterministic or stochastic action likelihoods
       
