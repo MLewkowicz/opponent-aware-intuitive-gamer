@@ -1,8 +1,18 @@
 import numpy as np
 import pyspiel
 import random
-from tqdm import tqdm  # Import tqdm
-import pdb
+import pickle
+import os
+import yaml
+import argparse
+from tqdm import tqdm
+import sys
+
+current_dir = os.path.dirname(os.path.abspath(__file__)) # .../state_dataset
+project_root = os.path.dirname(current_dir)              # .../intuitive-gamer-memo
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 # Default directions if game doesn't specify them
 DEFAULT_DIRECTIONS = [(1,0), (0,1), (1,1), (1,-1)] # h, v, diag, anti
 
@@ -18,7 +28,8 @@ def extract_board(state, game):
     # Plane 0: Current Player
     # Plane 1: Opponent 
     me_plane = obs[0, :, :]
-    opp_plane = obs[1, :, :]    
+    opp_plane = obs[1, :, :]
+    
     return me_plane - opp_plane
 
 def longest_chain(state, player_val, game):
@@ -101,25 +112,54 @@ def generate_all_states(ds, state, visited, num_turns, game, max_depth=None, pba
 
 
 class GameStateDataset:
-    def __init__(self, game: pyspiel.Game, max_depth_limit=None):
+    def __init__(self, game: pyspiel.Game, max_depth_limit=None, cache_file=None):
         self._items = []    # list of dicts
         self.game = game
         self.max_depth_limit = max_depth_limit
+        self.cache_file = cache_file
         
-        # Start generation
+        # Try loading from cache first
+        if self.cache_file and os.path.exists(self.cache_file):
+            print(f"Loading cached states from {self.cache_file}...")
+            if self.load():
+                print(f"Loaded {len(self._items)} states from cache.")
+                return
+
+        # Start generation if no cache or load failed
         print(f"Generating states for {game}...")
         visited = {}
         
-        # Initialize tqdm context manager
-        # Note: total is unknown for recursion, so it will show iterations/sec
         with tqdm(desc="Generating States", unit=" states") as pbar:
             generate_all_states(self, game.new_initial_state(), visited, 0, game, max_depth=max_depth_limit, pbar=pbar)
             
         print(f"Generated {len(self._items)} unique non-terminal states.")
+        
+        # Save to cache if file path provided
+        if self.cache_file:
+            self.save()
 
     def add(self, info):
         """info is the dict you are currently putting in visited[key]"""
         self._items.append(info)
+
+    def save(self):
+        """Save the dataset items to a pickle file."""
+        try:
+            with open(self.cache_file, 'wb') as f:
+                pickle.dump(self._items, f)
+            print(f"Saved dataset to {self.cache_file}")
+        except Exception as e:
+            print(f"Error saving cache: {e}")
+
+    def load(self):
+        """Load the dataset items from a pickle file."""
+        try:
+            with open(self.cache_file, 'rb') as f:
+                self._items = pickle.load(f)
+            return True
+        except Exception as e:
+            print(f"Error loading cache: {e}")
+            return False
 
     # --- Query builder ----------------------------------------------------
     def filter(self, **kwargs):
@@ -180,26 +220,55 @@ class GameStateView:
     def __iter__(self):
         yield from self._items
 
+# --- MAIN BLOCK ---
 if __name__ == "__main__":
-    try:
-        from games.mnk_game import MNKGame
-        # Example: 3x3, K=3, No Diagonals
-        rules = {"allowed_directions": {0: ["h", "v"], 1: ["h", "v"]}}
-        game = MNKGame(m=3, n=3, k=3, rules=rules)
-        print("Loaded Custom MNK Game (No Diagonals)")
-    except ImportError:
-        print("Custom MNKGame not found, loading standard Tic-Tac-Toe")
-        game = pyspiel.load_game("tic_tac_toe")
+    parser = argparse.ArgumentParser(description="Generate and pickle game states from config.")
+    parser.add_argument("--config", "-c", type=str, required=True, help="Path to config file (e.g., config/baseline.yaml)")
+    parser.add_argument("--output", "-o", type=str, default=None, help="Optional output filename. If not provided, one is generated.")
+    
+    args = parser.parse_args()
 
-    # Generate dataset (limited depth to keep test fast)
-    dataset = GameStateDataset(game, max_depth_limit=9)
-    
-    # Test filtering
-    winning_states = dataset.filter(winning=True)
-    print(f"Winning states found: {len(winning_states)}")
-    
-    samples = winning_states.sample(k=3)
-    for s in samples:
-        print("\nSampled State:")
-        print(s['state'])
-        print(f"Me Chain: {s['longest_chain_me']}, Opp Chain: {s['longest_chain_opp']}")
+    try:
+        # 1. Load Config
+        with open(args.config, 'r') as f:
+            config = yaml.safe_load(f)
+        
+        game_cfg = config.get("game", {})
+        game_name = game_cfg.get("name")
+        params = game_cfg.get("parameters", {})
+
+        # 2. Instantiate Game
+        if game_name == "mnk_game":
+            from games.mnk_game import MNKGame
+            game = MNKGame(**params)
+            print(f"Initialized Custom MNKGame: {params}")
+            
+            # Create a descriptive filename if none provided
+            if args.output is None:
+                m, n, k = params.get('m'), params.get('n'), params.get('k')
+                rules = params.get('rules', {})
+                
+                # Determine specific variant tag
+                variant_tag = "standard"
+                if rules.get("allowed_directions"): variant_tag = "restricted"
+                if rules.get("p0_extra_k"): variant_tag = "asymmetric_k"
+                if rules.get("opening_moves"): variant_tag = "opening_moves"
+                
+                args.output = f"dataset_mnk_{m}x{n}_k{k}_{variant_tag}.pkl"
+                
+        else:
+            game = pyspiel.load_game(game_name, params)
+            print(f"Initialized OpenSpiel Game: {game_name}")
+            if args.output is None:
+                args.output = f"dataset_{game_name}.pkl"
+
+        # 3. Run Generator
+        print(f"Output will be saved to: {args.output}")
+        # Note: Set max_depth_limit appropriately. For 4x4, depth 16 is fine. For 5x5, limit it or it will never finish.
+        limit = 16 if params.get('m', 3) * params.get('n', 3) <= 16 else 10 
+        dataset = GameStateDataset(game, max_depth_limit=limit, cache_file=args.output)
+        
+    except Exception as e:
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()

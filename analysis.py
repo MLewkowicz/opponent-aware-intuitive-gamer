@@ -67,7 +67,7 @@ class Experiment():
             policy_max_actions = {}
             for name, policy in self.policies.items():
                 probs = policy['policy'].action_likelihoods(state)
-                
+                    
                 if probs:
                     best_action = max(probs, key=probs.get)
                     policy_max_actions[name] = (best_action, state)
