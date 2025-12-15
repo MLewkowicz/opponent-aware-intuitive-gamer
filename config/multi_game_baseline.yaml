@@ -1,0 +1,177 @@
+---
+# Multi-Game Experiment Configuration
+experiment_name: "multi_game_policy_comparison"
+description: "Compare different game policies across multiple game variants"
+
+# Multiple games configuration
+games:
+#  3x3_k3_standard
+  - name: "mnk_game" 
+    parameters:
+      m: 3
+      n: 3
+      k: 3
+
+#  3x3_k3_restricted
+  - name: "mnk_game" 
+    parameters:
+      m: 3
+      n: 3
+      k: 3
+      rules:
+        allowed_directions:
+          0: ["h", "v"]              # P0 restricted
+          1: ["h", "v", "d1", "d2"]  # P1 standard
+
+#  3x3_k3_opening_moves
+  - name: "mnk_game"
+    parameters:
+      m: 3
+      n: 3
+      k: 3
+      rules:
+        opening_moves: 
+          1: 2
+
+# 4x4_k3_asymmetric
+  - name: "mnk_game"
+    parameters:
+      m: 4
+      n: 4
+      k: 3 # Base K
+      rules:
+        p0_extra_k: 1 # Adds 1 to base K for Player 0
+
+# 4x4_k3_opening_moves
+  - name: "mnk_game"
+    parameters:
+      m: 4
+      n: 4
+      k: 3
+      rules:
+        opening_moves: 
+          1: 2          
+
+#  4x4_k3_restricted
+  - name: "mnk_game" 
+    parameters:
+      m: 4
+      n: 4
+      k: 3
+      rules:
+        allowed_directions:
+          0: ["h", "v"]              # P0 restricted
+          1: ["h", "v", "d1", "d2"]  # P1 standard
+
+#  4x4_k3_standard
+  - name: "mnk_game" 
+    parameters:
+      m: 4
+      n: 4
+      k: 3
+
+# 4x4_k4_opening_moves
+  - name: "mnk_game"
+    parameters:
+      m: 4
+      n: 4
+      k: 4
+      rules:
+        opening_moves: 
+          1: 2       
+
+#  4x4_k4_restricted
+  - name: "mnk_game" 
+    parameters:
+      m: 4
+      n: 4
+      k: 4
+      rules:
+        allowed_directions:
+          0: ["h", "v"]              # P0 restricted
+          1: ["h", "v", "d1", "d2"]  # P1 standard
+
+
+# 4x4_k4_standard
+  - name: "mnk_game" 
+    parameters:
+      m: 4
+      n: 4
+      k: 4
+
+#5x3_k3_standard
+  - name: "mnk_game" 
+    parameters:
+      m: 5
+      n: 3
+      k: 3
+
+# Policies to evaluate (same across all games)
+policies:
+  - name: "random"
+    parameters:
+      seed: 42
+  - name: "intuitive_gamer" 
+    parameters:
+      opponent_inference:
+        enabled: false
+        method: "log_likelihood"
+        candidate_policies:
+          - name: "random"
+            parameters:
+              seed: 42
+          - name: "intuitive_gamer" 
+            parameters: {}
+          - name: "mcts"
+            parameters:
+              iterations: 1000
+              exploration_weight: 1.4
+              max_depth: 50
+              stochastic: false
+        params:
+          log_likelihood:
+            smoothing: 0.01
+          agreement_count:
+            threshold: 0.5
+      optimal_weights:
+        - name: "random"
+          parameters:
+            connect: 1.5
+            block: 0.3
+            center: 1.5
+        - name: "intuitive_gamer" 
+          parameters:
+            connect: 0.9
+            block: 0.3
+            center: 0.3
+        - name: "mcts"
+          parameters:
+            connect: 1.5
+            block: 0.9
+            center: 1.5
+      eta: 0.5
+  
+  - name: "mcts"
+    parameters:
+      iterations: 1000
+      exploration_weight: 1.4
+      max_depth: 50
+      stochastic: true
+
+# Game-agnostic sampler configuration
+sampler:
+  # Generic predicates that work across game types
+  predicates:
+    - "lambda x: x.get('current_player') in [1]"
+    - "lambda x: x.get('losing') in [True]" 
+    # - "lambda x: x.get('num_turns', 0) < 3"
+    # - "lambda x: x.get('longest_chain_me', 0) > 0"
+    # - "lambda x: x.get('longest_chain_opp', 0) > 0"
+  sample:
+    k: 1000
+    replace: false
+
+# Results combination strategy for multi-game experiments
+combination_strategy:
+  method: "concatenate"  # or "simple_average", "concatenate"
+  weights: "equal"  # or provide specific weights per game

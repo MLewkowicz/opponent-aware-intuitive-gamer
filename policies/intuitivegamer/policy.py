@@ -13,7 +13,7 @@ def softmax(x):
 
 class IntuitiveGamerPolicy(GamePolicy):
 
-    def __init__(self, game, weights={'connect': 1.0, 'block': 1.0, 'center': 1.0}, **kwargs):
+    def __init__(self, game, weights={'connect': 0.5, 'block': 0.5, 'center': 0.5}, **kwargs):
         print(f"[DEBUG] IntuitiveGamerPolicy.__init__ called, id={id(self)}")
         super().__init__(game)  # Call parent constructor first
         self.weights = weights
@@ -171,7 +171,6 @@ class IntuitiveGamerPolicy(GamePolicy):
         return likelihoods
     
     def step(self, state):
-        print(f"[DEBUG] step called, id={id(self)}, opponent_inference={self.opponent_inference}")
         if self.opponent_inference:
             # Update opponent model based on action history
             action_history = self.action_choices.get(1 - self.player_id, [])

@@ -83,13 +83,13 @@ class Experiment():
 
                 if action_a == action_b:
                     comparison_results[pair_key]["agreements"] += 1
-                else:
-                    print("----")
-                    print(state)
-                    print(state.current_player())
-                    print(name_a, action_a)
-                    print(name_b, action_b)
-                    print("----")
+                # else:
+                #     print("----")
+                #     print(state)
+                #     print(state.current_player())
+                #     print(name_a, action_a)
+                #     print(name_b, action_b)
+                #     print("----")
                 comparison_results[pair_key]["totals"] += 1
         return comparison_results
 

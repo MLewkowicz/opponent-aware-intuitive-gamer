@@ -78,11 +78,11 @@ policies:
 
 sampler:
   predicates:
-    - "lambda x: x['current_player'] in [-1, 1]"
-    - "lambda x: x['winning'] in [True, False]"
-    - "lambda x: x['num_turns'] >= 6"
-    - "lambda x: x['longest_chain_me'] > 0"
-    - "lambda x: x['longest_chain_opp'] > 0"    
+    - "lambda x: x.get('current_player') in [-1, 1]"
+    - "lambda x: x.get('winning') in [True, False]"
+    - "lambda x: x.get('num_turns', 0) >= 6"
+    - "lambda x: x.get('longest_chain_me', 0) > 0"
+    - "lambda x: x.get('longest_chain_opp', 0) > 0"    
   sample:
     k: 1000
     replace: false

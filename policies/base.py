@@ -30,3 +30,6 @@ class GamePolicy(ABC):
     def update_action_choices(self, action:int, state: pyspiel.State, player: int) -> int:
         self.action_choices.setdefault(player, [])
         self.action_choices[player].append((state, action))
+
+    def reset(self):
+        self.action_choices = {}

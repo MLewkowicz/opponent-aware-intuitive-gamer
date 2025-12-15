@@ -1,0 +1,84 @@
+# Simulated Gameplay Configuration
+experiment_name: "policy_vs_policy_simulation"
+description: "Simulate games between two specific policies across multiple game variants"
+
+# Number of game trials to run per game variant
+num_trials: 500
+
+# Whether to alternate starting player between trials
+# If true: Game 1 (P0 starts), Game 2 (P1 starts), Game 3 (P0 starts), etc.
+# If false: P0 always starts first
+alternate_starting_player: true
+
+# Two policies to compete against each other
+policies:
+  - name: "random"
+    parameters:
+      seed: 42
+  
+  - name: "intuitive_gamer" 
+    parameters:
+      opponent_inference:
+        enabled: true
+        method: "log_likelihood"
+        candidate_policies:
+          - name: "random"
+            parameters:
+              seed: 42
+          - name: "intuitive_gamer" 
+            parameters: {}
+          # - name: "mcts"
+          #   parameters:
+          #     iterations: 1000
+          #     exploration_weight: 1.4
+          #     max_depth: 50
+          #     stochastic: false
+        params:
+          log_likelihood:
+            smoothing: 0.01
+          agreement_count:
+            threshold: 0.5
+      optimal_weights:
+        - name: "random"
+          parameters:
+            connect: 1.5
+            block: 0.3
+            center: 1.5
+        - name: "intuitive_gamer" 
+          parameters:
+            connect: 0.9
+            block: 0.3
+            center: 0.3
+        - name: "mcts"
+          parameters:
+            connect: 1.5
+            block: 0.9
+            center: 1.5
+      eta: 1.0
+
+# Games to simulate
+games:
+  # 3x3 with restricted directions for P0
+  - name: "mnk_game" 
+    parameters:
+      m: 3
+      n: 3
+      k: 3
+      rules:
+        allowed_directions:
+          0: ["h", "v"]              # P0 restricted to horizontal/vertical
+          1: ["h", "v", "d1", "d2"]  # P1 can use all directions
+
+  # 4x4 Connect-3
+  - name: "mnk_game" 
+    parameters:
+      m: 5
+      n: 5
+      k: 3
+
+  # 4x4 Connect-4 (full board)
+  - name: "mnk_game" 
+    parameters:
+      m: 5
+      n: 5
+      k: 4
