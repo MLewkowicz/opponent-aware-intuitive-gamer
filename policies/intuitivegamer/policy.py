@@ -14,12 +14,12 @@ def softmax(x):
 class IntuitiveGamerPolicy(GamePolicy):
 
     def __init__(self, game, weights={'connect': 0.5, 'block': 0.5, 'center': 0.5}, **kwargs):
-        print(f"[DEBUG] IntuitiveGamerPolicy.__init__ called, id={id(self)}")
+        # print(f"[DEBUG] IntuitiveGamerPolicy.__init__ called, id={id(self)}")
         super().__init__(game)  # Call parent constructor first
         self.weights = weights
         self.directions = [(1,0), (0,1), (1,1), (1,-1)]
         self.opponent_inference = None  # Will be injected later if needed
-        print(f"[DEBUG] opponent_inference initialized to None, will be injected later")
+        # print(f"[DEBUG] opponent_inference initialized to None, will be injected later")
 
         optimal_weights_config = kwargs.get("optimal_weights", [])
         self.optimal_weights_dict = {
@@ -33,7 +33,7 @@ class IntuitiveGamerPolicy(GamePolicy):
     def set_opponent_inference(self, opponent_inference):
         """Inject opponent inference after policy creation to avoid circular imports."""
         self.opponent_inference = opponent_inference
-        print(f"[DEBUG] opponent_inference injected: {opponent_inference}")
+        # print(f"[DEBUG] opponent_inference injected: {opponent_inference}")
 
 
 
