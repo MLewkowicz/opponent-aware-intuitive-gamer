@@ -1,0 +1,78 @@
+experiment_name: "manifold_experiment"
+description: "3D Grid search of Depth vs Iterations"
+
+# Only game variants are needed here. 
+# Policies are instantiated dynamically by the script.
+games:
+# 4x4_k3_asymmetric
+  - name: "mnk_game"
+    parameters:
+      m: 4
+      n: 4
+      k: 3 # Base K
+      rules:
+        p0_extra_k: 1 # Adds 1 to base K for Player 0
+
+# 4x4_k3_opening_moves
+  - name: "mnk_game"
+    parameters:
+      m: 4
+      n: 4
+      k: 3
+      rules:
+        opening_moves: 
+          1: 2          
+
+#  4x4_k3_restricted
+  - name: "mnk_game" 
+    parameters:
+      m: 4
+      n: 4
+      k: 3
+      rules:
+        allowed_directions:
+          0: ["h", "v"]              # P0 restricted
+          1: ["h", "v", "d1", "d2"]  # P1 standard
+
+#  4x4_k3_standard
+  - name: "mnk_game" 
+    parameters:
+      m: 4
+      n: 4
+      k: 3
+
+# 4x4_k4_opening_movuv res
+  - name: "mnk_game"
+    parameters:
+      m: 4
+      n: 4
+      k: 4
+      rules:
+        opening_moves: 
+          1: 2       
+
+#  4x4_k4_restricted
+  - name: "mnk_game" 
+    parameters:
+      m: 4
+      n: 4
+      k: 4
+      rules:
+        allowed_directions:
+          0: ["h", "v"]              # P0 restricted
+          1: ["h", "v", "d1", "d2"]  # P1 standard
+
+
+# 4x4_k4_standard
+  - name: "mnk_game" 
+    parameters:
+      m: 4
+      n: 4
+      k: 4
+
+#5x3_k3_standard
+  - name: "mnk_game" 
+    parameters:
+      m: 5
+      n: 3
+      k: 3
