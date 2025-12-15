@@ -2,19 +2,21 @@
 experiment_name: "policy_vs_policy_simulation"
 description: "Simulate games between two specific policies across multiple game variants"
 
-# Number of game trials to run per game variant
-num_trials: 500
+# Number of game trials to run per game variant (fewer trials to see individual variation)
+num_trials: 50
 
 # Whether to alternate starting player between trials
 # If true: Game 1 (P0 starts), Game 2 (P1 starts), Game 3 (P0 starts), etc.
 # If false: P0 always starts first
 alternate_starting_player: true
 
+# Track posterior probabilities over time (only works with single game)
+track_posteriors: true
+
 # Two policies to compete against each other
 policies:
-  - name: "random"
-    parameters:
-      seed: 42
+  - name: "intuitive_gamer"
+    parameters: {}
   
   - name: "intuitive_gamer" 
     parameters:
@@ -56,29 +58,11 @@ policies:
             center: 1.5
       eta: 1.0
 
-# Games to simulate
+# Games to simulate (only one game for posterior tracking)
 games:
-  # 3x3 with restricted directions for P0
+  # 3x3 Standard Tic-Tac-Toe
   - name: "mnk_game" 
     parameters:
       m: 3
       n: 3
       k: 3
-      rules:
-        allowed_directions:
-          0: ["h", "v"]              # P0 restricted to horizontal/vertical
-          1: ["h", "v", "d1", "d2"]  # P1 can use all directions
-
-  # 4x4 Connect-3
-  - name: "mnk_game" 
-    parameters:
-      m: 5
-      n: 5
-      k: 3
-
-  # 4x4 Connect-4 (full board)
-  - name: "mnk_game" 
-    parameters:
-      m: 5
-      n: 5
-      k: 4

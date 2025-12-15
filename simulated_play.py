@@ -9,9 +9,11 @@ across multiple game variants and collect statistics on game outcomes.
 import argparse
 import yaml
 import statistics
-from typing import Dict, List, Any, Tuple
+from typing import Dict, List, Any, Tuple, Optional
 from dataclasses import dataclass
 import random
+import numpy as np
+import matplotlib.pyplot as plt
 
 import pyspiel
 from utils.utils import load_game, load_policies
@@ -25,6 +27,7 @@ class GameResult:
     num_turns: int
     final_utility: List[float]  # Utility for each player
     policies_swapped: bool  # Whether policies were swapped for this game
+    posteriors_over_time: Optional[Dict[str, List[List[float]]]] = None  # policy_name -> [turn_posteriors]
 
 
 @dataclass
@@ -94,18 +97,22 @@ class GameSimulator:
         self.game = game
         self.policies = [policy_0, policy_1]
     
-    def simulate_game(self, alternate_starting_player: bool = False, game_index: int = 0) -> GameResult:
+    def simulate_game(self, alternate_starting_player: bool = False, game_index: int = 0, track_posteriors: bool = False) -> GameResult:
         """Simulate a single game between the two policies.
         
         Args:
             alternate_starting_player: If True, alternate who goes first based on game_index
             game_index: Index of current game (used for alternating starting player)
+            track_posteriors: If True, track posterior probabilities over time
             
         Returns:
             GameResult with winner, number of turns, and final utilities
         """
         state = self.game.new_initial_state()
         turn_count = 0
+        
+        # Initialize posterior tracking
+        posteriors_over_time = {} if track_posteriors else None
         
         # Determine starting player assignment
         if alternate_starting_player and game_index % 2 == 1:
@@ -117,6 +124,14 @@ class GameSimulator:
         for policy in current_policies:
             policy.assign_playerid(current_policies.index(policy))
             policy.reset()
+        
+        # Initialize posterior tracking for policies with posteriors
+        if track_posteriors and posteriors_over_time is not None:
+            for i, policy_wrapper in enumerate(current_policies):
+                policy_obj = policy_wrapper['policy'] if hasattr(policy_wrapper, '__getitem__') else policy_wrapper
+                if hasattr(policy_obj, 'posteriors'):
+                    policy_name = policy_wrapper.get('name', f'policy_{i}') if hasattr(policy_wrapper, '__getitem__') else f'policy_{i}'
+                    posteriors_over_time[policy_name] = []
 
 
         while not state.is_terminal():
@@ -145,6 +160,17 @@ class GameSimulator:
                 
             state.apply_action(action)
             turn_count += 1
+            
+            # Track posteriors after each action
+            if track_posteriors and posteriors_over_time is not None:
+                for i, policy_wrapper in enumerate(current_policies):
+                    policy_obj = policy_wrapper['policy'] if hasattr(policy_wrapper, '__getitem__') else policy_wrapper
+                    if hasattr(policy_obj, 'posteriors'):
+                        policy_name = policy_wrapper.get('name', f'policy_{i}') if hasattr(policy_wrapper, '__getitem__') else f'policy_{i}'
+                        if policy_name in posteriors_over_time:
+                            # Get current posteriors and store a copy
+                            current_posteriors = getattr(policy_obj, 'posteriors', [])
+                            posteriors_over_time[policy_name].append(copy.deepcopy(current_posteriors))
             
             # Safety check for infinite games
             if turn_count > 1000:
@@ -181,22 +207,157 @@ class GameSimulator:
             policy_winner=policy_winner,
             num_turns=turn_count,
             final_utility=final_utilities,
-            policies_swapped=policies_swapped
+            policies_swapped=policies_swapped,
+            posteriors_over_time=posteriors_over_time
         )
     
-    def simulate_multiple_games(self, num_trials: int, alternate_starting_player: bool = True) -> List[GameResult]:
+    def simulate_multiple_games(self, num_trials: int, alternate_starting_player: bool = True, track_posteriors: bool = False) -> List[GameResult]:
         """Simulate multiple games and return results."""
         results = []
         
         for i in range(num_trials):
-            # try:
-            result = self.simulate_game(alternate_starting_player, i)
-            results.append(result)
-            # except Exception as e:
-            #     print(f"Warning: Game {i+1} failed with error: {e}")
-            #     continue
+            try:
+                result = self.simulate_game(alternate_starting_player, i, track_posteriors)
+                results.append(result)
+            except Exception as e:
+                print(f"Warning: Game {i+1} failed with error: {e}")
+                continue
                 
         return results
+
+
+def plot_posteriors_over_time(results: List[GameResult], policy_names: List[str], save_path: Optional[str] = None) -> None:
+    """Plot average posterior probabilities of opponent types over game turns for intuitive gamer."""
+    
+    # Look for intuitive gamer policies and collect their opponent belief data
+    opponent_beliefs = {}  # opponent_type -> [turn_data_across_games]
+    
+    print(f"Debug: Processing {len(results)} results for posterior plotting")
+    
+    for result_idx, result in enumerate(results):
+        if result.posteriors_over_time is None:
+            continue
+            
+        print(f"Debug: Result {result_idx} has posteriors for policies: {list(result.posteriors_over_time.keys())}")
+        
+        # Find policies with opponent inference (any policy that has posteriors)
+        for policy_name, turn_posteriors in result.posteriors_over_time.items():
+            print(f"Debug: Policy {policy_name} has {len(turn_posteriors)} turns of posteriors")
+            
+            if len(turn_posteriors) > 0:
+                print(f"Debug: First few posteriors: {turn_posteriors[:2]}")
+                
+                # Process this policy's opponent beliefs
+                for turn_idx, turn_posterior_list in enumerate(turn_posteriors):
+                    if isinstance(turn_posterior_list, list) and len(turn_posterior_list) > 0:
+                        # Each turn contains a list of posterior dicts
+                        # Take the last posterior from each turn (final belief after all actions in that turn)
+                        final_posterior = turn_posterior_list[-1]
+                        
+                        if isinstance(final_posterior, dict):
+                            # final_posterior should be like {'random': 0.7, 'intuitive_gamer': 0.3}
+                            for opponent_type, prob_value in final_posterior.items():
+                                if opponent_type not in opponent_beliefs:
+                                    opponent_beliefs[opponent_type] = []
+                                
+                                # Ensure we have enough turn slots
+                                while len(opponent_beliefs[opponent_type]) <= turn_idx:
+                                    opponent_beliefs[opponent_type].append([])
+                                
+                                try:
+                                    prob = float(prob_value)
+                                    opponent_beliefs[opponent_type][turn_idx].append(prob)
+                                except (TypeError, ValueError):
+                                    print(f"Debug: Could not convert {opponent_type} prob {prob_value} to float")
+                                    continue
+                        else:
+                            print(f"Debug: Turn {turn_idx} final posterior is not a dict: {type(final_posterior)}")
+                    elif isinstance(turn_posterior_list, dict):
+                        # Direct dict case (shouldn't happen based on debug, but just in case)
+                        for opponent_type, prob_value in turn_posterior_list.items():
+                            if opponent_type not in opponent_beliefs:
+                                opponent_beliefs[opponent_type] = []
+                            
+                            while len(opponent_beliefs[opponent_type]) <= turn_idx:
+                                opponent_beliefs[opponent_type].append([])
+                            
+                            try:
+                                prob = float(prob_value)
+                                opponent_beliefs[opponent_type][turn_idx].append(prob)
+                            except (TypeError, ValueError):
+                                continue
+                    else:
+                        print(f"Debug: Turn {turn_idx} posteriors structure unexpected: {type(turn_posterior_list)}")
+            
+            # Only process the first policy with posteriors for now
+            if opponent_beliefs:
+                break
+        
+        # Only process first few results for debugging
+        if result_idx >= 2:
+            break
+    
+    print(f"Debug: Collected opponent beliefs for: {list(opponent_beliefs.keys())}")
+    for opponent_type, turn_data in opponent_beliefs.items():
+        print(f"Debug: {opponent_type} has data for {len(turn_data)} turns")
+    
+    if not opponent_beliefs:
+        print("No opponent belief data found to plot.")
+        print("Make sure you have an intuitive_gamer policy with opponent_inference enabled.")
+        return
+    
+    # Create a single plot showing opponent beliefs over time
+    plt.figure(figsize=(12, 8))
+    
+    # Plot each opponent type
+    for opponent_type, turn_data in opponent_beliefs.items():
+        # Calculate mean and std for each turn
+        turns = []
+        means = []
+        stds = []
+        
+        for turn_idx, probs in enumerate(turn_data):
+            if len(probs) > 0:
+                turns.append(turn_idx)
+                means.append(np.mean(probs))
+                stds.append(np.std(probs))
+        
+        if len(turns) > 0:
+            turns = np.array(turns)
+            means = np.array(means)
+            stds = np.array(stds)
+            
+            # Plot mean line
+            plt.plot(turns, means, label=f'Belief opponent is {opponent_type}', linewidth=3, marker='o', markersize=4)
+            
+            # Add std shading
+            plt.fill_between(turns, means - stds, means + stds, alpha=0.2)
+            
+            # Print some debug info
+            print(f"Opponent type '{opponent_type}':")
+            print(f"  Turn range: 0 to {len(turns)-1}")
+            print(f"  Belief range: {np.min(means):.3f} to {np.max(means):.3f}")
+            print(f"  Average std: {np.mean(stds):.3f}")
+            print(f"  Games per turn: {[len(probs) for probs in turn_data[:5]]} (first 5 turns)")
+    
+    plt.title('Intuitive Gamer: Belief About Opponent Type Over Time', fontsize=14, fontweight='bold')
+    plt.xlabel('Turn Number', fontsize=12)
+    plt.ylabel('Posterior Probability', fontsize=12)
+    plt.legend(fontsize=11)
+    plt.grid(True, alpha=0.3)
+    plt.ylim(0, 1)
+    
+    # Add a horizontal line at 0.5 for reference
+    plt.axhline(y=0.5, color='gray', linestyle='--', alpha=0.5, label='Equal belief (0.5)')
+    plt.legend(fontsize=11)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"Posterior plot saved to {save_path}")
+    
+    plt.show()
 
 
 def calculate_stats(results: List[GameResult], game_name: str, policy_0_name: str, policy_1_name: str) -> SimulationStats:
@@ -328,9 +489,14 @@ def run_simulation_experiment(config: Dict[str, Any]) -> None:
             # Create simulator
             simulator = GameSimulator(policy_list[0], policy_list[1], game)
             
+            # Check if we should track posteriors (only for single game experiments)
+            track_posteriors = len(games_config) == 1 and config.get("track_posteriors", False)
+            if track_posteriors:
+                print("Posterior tracking enabled (single game experiment)")
+            
             # Run simulations
             print(f"Running {num_trials} games...")
-            results = simulator.simulate_multiple_games(num_trials, alternate_starting)
+            results = simulator.simulate_multiple_games(num_trials, alternate_starting, track_posteriors)
             
             # Calculate statistics
             stats = calculate_stats(results, game_display_name, policy_names[0], policy_names[1])
@@ -347,6 +513,11 @@ def run_simulation_experiment(config: Dict[str, Any]) -> None:
             print(f"  {stats.policy_1_name} as P2: {stats.policy_1_as_p2_win_rate:.1%} ({stats.policy_1_as_p2_wins}/{stats.policy_1_as_p2_games})")
             print(f"  Avg turns: {stats.avg_turns:.2f} ± {stats.std_turns:.2f}")
             print(f"  Turn range: {stats.min_turns} - {stats.max_turns}")
+            
+            # Plot posteriors if tracked
+            if track_posteriors and any(r.posteriors_over_time for r in results):
+                print("\nGenerating posterior probability plots...")
+                plot_posteriors_over_time(results, [stats.policy_0_name, stats.policy_1_name])
             
         except Exception as e:
             print(f"✗ Failed to simulate {game_config['name']}: {e}")

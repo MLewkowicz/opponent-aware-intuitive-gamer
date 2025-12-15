@@ -28,6 +28,8 @@ class IntuitiveGamerPolicy(GamePolicy):
         }
         self.eta = kwargs.get("eta", 0.5)  # Learning rate for weight updates
 
+        self.posteriors = []
+
     def set_opponent_inference(self, opponent_inference):
         """Inject opponent inference after policy creation to avoid circular imports."""
         self.opponent_inference = opponent_inference
@@ -175,6 +177,7 @@ class IntuitiveGamerPolicy(GamePolicy):
             # Update opponent model based on action history
             action_history = self.action_choices.get(1 - self.player_id, [])
             posterior = self.opponent_inference.calculate_likelihoods(action_history)
+            self.posteriors.append(posterior)
             # Initialize averaged weights
             avg_weights = {
                 k: 0.0
