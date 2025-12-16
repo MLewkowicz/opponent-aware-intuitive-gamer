@@ -47,8 +47,8 @@ def run_experiment(config_path):
         config = yaml.safe_load(f)
 
     # --- Parameter Grid ---
-    ig_depths = [1, 2, 3, 4]
-    mcts_iterations = [1, 5, 10, 50, 100, 200, 500, 1000]
+    ig_depths = [2, 3, 4]
+    mcts_iterations = [5, 10, 50, 100, 250, 500, 1000, 2000]
     
     # Games to test against (from config)
     games_config = config["games"]
@@ -89,21 +89,28 @@ def run_experiment(config_path):
                     # We alternate who starts to be fair, but track IG's win rate
                     # Game 1: IG starts (P0)
                     res = play_match(game, ig_bot, mcts_bot)
-                    total_wins += res
+                    if res != 0.5:
+                        total_wins += res
+                        total_games += 1
                     
                     # Game 2: MCTS starts (P0), IG is P1
                     # Note: We need to re-init bots with correct player_ids if they rely on it
-                    ig_bot_p1 = DepthLimitedIGPolicy(game, player_id=1, max_depth=depth, k=3, weights=default_weights)
+                    ig_bot_p1 = DepthLimitedIGPolicy(game, player_id=1, max_depth=depth, k=4, weights=default_weights)
                     mcts_bot_p0 = MCTSAgent(game, player_id=0, iterations=mcts_k)
                     
+                    res_flipped = play_match(game, mcts_bot_p0, ig_bot_p1)
                     # Result from perspective of P0 (MCTS). 
                     # If P0 wins (val=1), IG lost. If P0 loses (val=0), IG won.
-                    res_flipped = play_match(game, mcts_bot_p0, ig_bot_p1)
-                    total_wins += (1.0 - res_flipped)
+                    if res_flipped != 0.5:
+                        # If res_flipped is 1.0 (MCTS wins), we add 0.0 to total_wins
+                        # If res_flipped is 0.0 (IG wins), we add 1.0 to total_wins
+                        total_wins += (1.0 - res_flipped)
+                        total_games += 1
                     
-                    total_games += 2
-
-            avg_win_rate = total_wins / total_games
+            if total_games > 0:
+                avg_win_rate = total_wins / total_games
+            else:
+                avg_win_rate = 0.0
             win_rates[d_idx, m_idx] = avg_win_rate
             print(f"  -> Win Rate: {avg_win_rate:.2f}")
 
